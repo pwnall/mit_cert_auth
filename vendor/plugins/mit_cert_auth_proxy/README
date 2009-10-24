@@ -1,0 +1,14 @@
+MitCertAuthProxy
+================
+
+This is a Ruby gem and Rails plug-in for interacting with the MIT certificate
+authentication proxy at https://costan.scripts.mit.edu:444/mit_cert_auth/
+
+
+Example
+=======
+
+Example goes here.
+
+
+Copyright (c) 2009 Zergling.Net, released under the MIT license

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>
+			MIT Certificate Authentication Proxy
+		</title>
+	</head>
+	<body>
+		<h1>MIT Certificate Authentication Proxy</h1>
+		<p>This proxy enables MIT certificate-based authentication on servers
+		running off MIT's domain. You might want to do that if you want to roll your
+		own server infrastructure, but don't want to deal with IS&T for getting a
+		SSL certificate.</p>
+		<p>Note that you should consider
+    <%= link_to 'http://scripts.mit.edu', 'scripts.mit.edu' %> before deciding
+		to roll your own infrastructure.</p>
+		
+		<h2>Libraries</h2>
+		If there is a library available for your language, you should probably use
+		that instead of re-implementing it from scratch.
+		
+		<table>
+			<thead>
+				<th>Language</th>
+				<th>Library</th>
+				<th>License</th>
+			</thead>
+			<tr>
+				<td>Ruby and Ruby on Rails</td>
+				<td><a href="http://github.com/costan/mit_cert_auth_proxy">
+					MitCertAuthProxy</a>
+				</td>
+				<td>MIT</td>
+			</tr>
+		</table>
+		
+		<h2>Usage</h2>
+		<p>To use this service, you need to send users to the service, to get
+		them authenticated, and then you need to check the signatures in the 
+		authentication data with the service's public signature key.</p>
+		
+		<h3>Authenticating Users</h3>
+		<p>The following authentication methods are supported:
+			<dl>
+				<dt>
+					<code>GET /auth?nonce=<em>123abc</em>&redirect_to=<em>url</em></code>				
+				</dt>
+				<dd>
+					Authenticates the users, and then sends them to a URL of your choice.
+					The authentication data is appended to the URL, as query parameters.
+				</dd>
+        <dt>
+          <code>GET /auth.json?nonce=<em>123abc</em>&callback=<em>callbackMethod
+					</em></code>       
+        </dt>
+        <dd>
+          Authenticates the users, and returns authentication data in the JSONP
+					format, perfect for AJAX consumption.
+        </dd>
+			</dl>
+		</p>
+		<p>Authentication data is a dictionary with string keys and values. Some of
+		the keys might be absent.
+		  <dl>
+		  	<dt><code>dn</code></dt>
+				<dd>The DN in the user's certificate. Contains users' full names and
+				emails.</dd>
+				<dt><code>valid_from</code></dt>
+				<dd>The time when the user's certificate starts being valid. Your
+				service should check this time against the current time and reject
+				expired certificates.</dd>
+        <dt><code>valid_until</code></dt>
+        <dd>The time when the user's certificate starts being valid. Your
+        service should check this time against the current time and reject
+        expired certificates.</dd>
+        <dt><code>verify</code></dt>
+        <dd>Set to <code>SUCCESS</code> if the user's certificate was validated.
+				</dd>
+				<dt><code>serial</code></dt>
+				<dd>The certificate's serial number. In theory, this can be checked
+				against a CRL (certificate revocation list). However, MIT doesn't seem 
+				to have CRLs.</dd>
+        <dt><code>issuer_dn</code></dt>
+        <dd>The issuer DN in the user's certificate. Should always be MIT.</dd>
+        <dt><code>protocol</code>, <code>cipher</code>, <code>ssl_sig</code>
+				</dt>
+        <dd>SSL implementation. These can come in handy in the future, for
+				emergency black-listing authentication servers with unpatched security
+				vulnerabilities.</dd>
+		  </dl>
+		</p>
+		<p>The following keys are added to the authentication data by the proxy.
+		<dl>
+			<dt><code>nonce</code></dt>
+			<dd>The nonce sent in the authentication request.</dd>
+			<dt><code>signature</code></dt>
+			<dd>A signature over the other keys and their values. The signature is
+			produced as follows:
+			  <ol>
+			  	<li>Sort the key-value pairs by the keys, alphabetically.</li>
+					<li>Separate keys and values with newline characters.
+					(<code>\n</code>). Do not add a newline after the last value.</li>
+					<li>Sign the resulting string using PKCS#1 padding and the SHA-1
+					hashing method.</li>
+					<li>base64-encode the signature.</li>
+				</ol>
+			</dd>
+		</dl>
+		</p>
+		
+		<h3>Validating Authentication Data</h3>
+		<p>The server's public signature key can be obtained by the following
+		methods:
+		<dl>
+			<dt><code>GET /pubkey.pem</code></dt>
+			<dd>The response is the PEM-encoded public key.</dd>
+			<dt><code>GET /pubkey.json?callback=<em>callbackMethod</em></code></dt>
+			<dd>Produces a JSONP response containing the <code>key</code> key whose
+			value is the PEM-encoded public key. This is intended to facilitate
+			AJAX applications.</dd>
+		</dl>
+		</p>
+		
+		<p>The following steps should be taken to validate the authentication
+		data before trusting the identity in the <code>dn</code> key.
+			<ol>
+        <li>Check that <code>verify</code> is <code>SUCCESS</code>.</li>
+				<li>Check that the current time falls between times in
+				<code>valid_from</code> and <code>valid_until</code>.</li>
+				<li>Check that <code>issuer_dn</code> matches MIT.</li>
+        <li>Check the signature in the <code>signature</code> key.</li>
+			</ol>
+		</p>
+			
+		<h2>Your Authentication Data</h2>
+		<p>This is the authentication data that the server would send for you.
+		It is provided to help you get a better picture when implementing your
+		service.</p>
+	  <table>
+	  	<thead>
+	  		<th>Key</th>
+				<th>Value</th>
+	  	</thead>
+			<% @auth_data.each do |key, value| %>
+			<tr>
+				<td><%=h key %></td>
+				<td><%=h value %></td>
+			</tr>
+			<% end %>
+	  </table>
+	</body>
+</html>

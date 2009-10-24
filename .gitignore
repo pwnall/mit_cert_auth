@@ -1,0 +1,4 @@
+*~
+/.loadpath
+/db/*.sqlite*
+/config/signkey.priv
