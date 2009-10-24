@@ -51,15 +51,69 @@ module MitCertAuthProxy
   def self.random_nonce
     [OpenSSL::Random.random_bytes(16)].pack('m')    
   end
+  
+  # Checks the authentication data.
+  #
+  # Returns the authentication nonce for application-specific verification, or
+  # false if the authentication data shows a failure. 
+  def self.verify_data(data)
+    # Step 1: SSL status.
+    return false if data['verify'] != 'SUCCESS'
+
+    # Bulk-check for the keys for the other steps.
+    required_keys = ['cipher', 'dn', 'issuer_dn', 'nonce', 'protocol', 'serial',
+                     'signature', 'ssl_sig', 'valid_from', 'valid_until']
+    return false unless required_keys.all? { |key| data.has_key? key }
     
-  # Checks authentication data.
+    # Step 2: certificate expiration.
+    now = Time.now
+    return false if now < Time.parse(data['valid_from'])
+    return false if now > Time.parse(data['valid_until'])
+    
+    # Step 3: issuer DN.
+    dn_prefix =
+      '/C=US/ST=Massachusetts/O=Massachusetts Institute of Technology/OU=Client'
+    return false if data['issuer_dn'][0, dn_prefix.length] != dn_prefix
+    
+    # Step 4: signature.
+    return false unless verify_data_signature(data)
+    
+    # CRL verification would happen here.
+    
+    # Blacklisting checking would happen here.
+    
+    return decode_data(data)
+  end
+  
+  # URL to MIT's page explaining how to obtain certificates.
+  #
+  # Sites that need for MIT certificates should have a link to this page. The
+  # URL is included here so sites don't have to be updated individually when
+  # the URL changes.
+  def self.mit_certificates_url
+    'http://ist.mit.edu/services/certificates#content_paragraph_1'
+  end
+    
+  # Checks the signature in authentication data.
   #
   # This method will automatically download the proxy's public key, if
   # necessary. 
-  def self.verify_data(data)
+  def self.verify_data_signature(data)
     signature = data['signature'].unpack('m').first
     blob = _presign_blob data
     signing_key.verify OpenSSL::Digest::SHA1.new, signature, blob
+  end
+  
+  # Extracts the interesting fields from the authentication data.
+  #
+  # This should not be called directly. verify_data calls it when the
+  # authentication data is valid. Client code should call verify_data to avoid
+  # attacks on the authorization system.
+  #
+  # See verify_data for what the method returns.
+  def self.decode_data(data)
+    dn = Hash[*data['dn'][1..-1].split('/').map { |f| f.split '=' }.flatten]
+    { :name => dn['CN'], :email => dn['emailAddress'], :nonce => data['nonce'] }
   end
   
   # Signs authentication data.

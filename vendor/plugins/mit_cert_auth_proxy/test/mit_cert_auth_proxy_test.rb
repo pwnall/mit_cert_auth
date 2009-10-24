@@ -45,9 +45,11 @@ class MitCertAuthProxyTest < ActiveSupport::TestCase
 
     flexmock(MitCertAuthProxy).should_receive(:signing_key).
                                and_return(key.public_key)
-    assert MitCertAuthProxy.verify_data(data), "Valid signature didn't verify"
+    assert MitCertAuthProxy.verify_data_signature(data),
+           "Valid signature didn't pass verification"
     data[:c] = 4
-    assert !MitCertAuthProxy.verify_data(data), "Invalid signature verified"    
+    assert !MitCertAuthProxy.verify_data_signature(data),
+           'Invalid signature passed verification'
   end
   
   def test_random_nonce
@@ -80,5 +82,11 @@ class MitCertAuthProxyTest < ActiveSupport::TestCase
     assert_equal URI.parse(golden_url),
                  MitCertAuthProxy.auth_url_calling('callbackMethod', '1234'),
                  'eximplicit nonce'
+  end
+  
+  def test_mit_certificates_url
+    page = Net::HTTP.get URI.parse(MitCertAuthProxy.mit_certificates_url)
+    assert /certificates at mit/i =~ page,
+           'The linked page doesn\'t contain "certificates at mit"'
   end
 end
