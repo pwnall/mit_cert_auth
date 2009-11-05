@@ -16,12 +16,13 @@ class AuthenticationControllerTest < ActionController::TestCase
   
   def test_auth_with_redirect
     get :auth, :nonce => @nonce, :redirect_to => 'http://www.awesome.com/auth'
-    golden_url = 'http://www.awesome.com/auth?dn=costan%40mit.edu&nonce=' +
-      CGI.escape(@nonce) + '&signature='
+    golden_url = 'http://www.awesome.com/auth?auth%5Bdn%5D=costan%40mit.edu' +
+      '&auth%5Bnonce%5D=' + CGI.escape(@nonce) + '&auth%5Bsignature%5D='
     assert_response :redirect
     url = @response.redirect_url
     assert_equal golden_url, url[0, golden_url.length], 'Invalid golden URL'
-    _check_signature URI.decode(url[golden_url.length..-1])
+    _check_signature_data 'dn' => @dn, 'nonce' => @nonce,
+         'signature' => URI.decode(url.to_s[golden_url.length..-1])
   end
     
   def test_auth_with_callback
@@ -31,13 +32,12 @@ class AuthenticationControllerTest < ActionController::TestCase
     
     assert_equal @dn, data['dn'], 'DN'
     assert_equal @nonce, data['nonce'], 'Nonce'
-    _check_signature data['signature']
+    _check_signature_data data
   end
 
-  def _check_signature(signature)
+  def _check_signature_data(data)
     flexmock(MitCertAuthProxy).should_receive(:signing_key).
                                and_return(SignKeyHolder.new.key.public_key)
-    data = {'dn' => @dn, 'nonce' => @nonce, 'signature' => signature}
-    assert MitCertAuthProxy.verify_data(data), 'Invalid signature'
+    assert MitCertAuthProxy.verify_data_signature(data), 'Invalid signature'
   end
 end

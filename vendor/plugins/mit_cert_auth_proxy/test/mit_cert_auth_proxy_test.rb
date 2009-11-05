@@ -18,11 +18,14 @@ class MitCertAuthProxyTest < ActiveSupport::TestCase
   
   def test_redirect_url
     data = {:s => :win, 't u' => 'also win'}
-    [['http://www.awesome.com', 'http://www.awesome.com?s=win&t+u=also+win'],
-     ['http://mit.edu/', 'http://mit.edu/?s=win&t+u=also+win'],
-     ['http://mit.edu/page', 'http://mit.edu/page?s=win&t+u=also+win'],
+    [['http://www.awesome.com',
+      'http://www.awesome.com?auth%5Bs%5D=win&auth%5Bt+u%5D=also+win'],
+     ['http://mit.edu/',
+      'http://mit.edu/?auth%5Bs%5D=win&auth%5Bt+u%5D=also+win'],
+     ['http://mit.edu/page',
+      'http://mit.edu/page?auth%5Bs%5D=win&auth%5Bt+u%5D=also+win'],
      ['http://mit.edu/page?q=one',
-      'http://mit.edu/page?q=one&s=win&t+u=also+win']
+      'http://mit.edu/page?q=one&auth%5Bs%5D=win&auth%5Bt+u%5D=also+win']
     ].each do |base_url, golden_url|
       assert_equal golden_url,
                    MitCertAuthProxy.redirect_url(base_url, data).to_s,
@@ -88,5 +91,15 @@ class MitCertAuthProxyTest < ActiveSupport::TestCase
     page = Net::HTTP.get URI.parse(MitCertAuthProxy.mit_certificates_url)
     assert /certificates at mit/i =~ page,
            'The linked page doesn\'t contain "certificates at mit"'
+  end
+  
+  def test_mock_auth_data
+    key = OpenSSL::PKey::RSA.generate 512
+    flexmock(MitCertAuthProxy).should_receive(:signing_key).
+                               and_return(key.public_key)
+    data = MitCertAuthProxy.mock_auth_data 'VMC', 'vmc@MIT.EDU', key,
+                                           'some nonce'
+    golden = { :name => 'VMC', :email => 'vmc@MIT.EDU', :nonce => 'some nonce' }
+    assert_equal golden, MitCertAuthProxy.verify_data(data)
   end
 end

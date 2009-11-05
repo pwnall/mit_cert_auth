@@ -15,7 +15,7 @@ class DocumentationControllerTest < ActionController::TestCase
   def _check_sign_key(sign_key_pem)
     sign_key = OpenSSL::PKey::RSA.new sign_key_pem
     assert !sign_key.private?, 'Private key leaked!'
-    assert_equal sign_key.inspect, SignKeyHolder.new.key.public_key.inspect,
+    assert_equal SignKeyHolder.new.key.public_key.inspect, sign_key.inspect,
                  'Wrong key returned'    
   end
   

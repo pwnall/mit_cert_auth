@@ -12,21 +12,11 @@ class SignatureVerificationTest < ActiveSupport::TestCase
     
     @@key ||= OpenSSL::PKey::RSA.generate 512
     @key = @@key
-    
-    dn = '/C=US/ST=Massachusetts/O=Massachusetts Institute of Technology/' +
-         'OU=Client CA v1/CN=Victor Marius Costan/' +
-         'emailAddress=costan@MIT.EDU'
-    issuer_dn = '/C=US/ST=Massachusetts/O=Massachusetts Institute of ' +
-                'Technology/OU=Client CA v1'
-                
+        
     @nonce = 'O9eYWU/t1NSb+ZDmfniqizBSeNhVtsnTHS1H3T2FtRc='
-    @data = {'dn' => dn, 'issuer_dn' => issuer_dn, 'verify' => 'SUCCESS',
-             'serial' => 'D376EC2AE81A03E10743D175CB659F58',
-             'nonce' => @nonce, 'valid_from' => (Time.now - 120).utc.to_s,
-             'valid_until' => (Time.now + 120).utc.to_s,
-             'cipher' => 'DHE-RSA-CAMELLIA256-SHA', 'protocol' => 'TLSv1',
-             'ssl_sig' => 'sha1WithRSAEncryption'}        
-
+    @data = MitCertAuthProxy.mock_auth_data 'Victor Marius Costan',
+                                            'costan@MIT.EDU', @key, @nonce
+    @data.delete 'signature'
     flexmock(MitCertAuthProxy).should_receive(:signing_key).
                                and_return(@key.public_key)
   end

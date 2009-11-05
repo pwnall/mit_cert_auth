@@ -30,7 +30,7 @@ module MitCertAuthProxy
     url.query += '&' unless url.query.empty?
     # NOTE: the "sort" call is only there for determinism.
     url.query += signature_data.map { |k, v|
-      CGI.escape(k.to_s) + '=' + CGI.escape(v.to_s)
+      CGI.escape("auth[#{k.to_s}]") + '=' + CGI.escape(v.to_s)
     }.sort.join '&'
     url
   end
@@ -54,8 +54,11 @@ module MitCertAuthProxy
   
   # Checks the authentication data.
   #
-  # Returns the authentication nonce for application-specific verification, or
-  # false if the authentication data shows a failure. 
+  # Returns a hash with the following information on success, or
+  # false if the authentication data shows a failure.
+  #   :nonce:: the application should verify it for freshness
+  #   :name:: the full name in the user's MIT certificate
+  #   :email:: the e-mail address in the user's MIT certificate
   def self.verify_data(data)
     # Step 1: SSL status.
     return false if data['verify'] != 'SUCCESS'
@@ -85,6 +88,37 @@ module MitCertAuthProxy
     return decode_data(data)
   end
   
+  # Generates fake authentication data for automated testing.
+  #
+  # The caller is responsible for generating an OpenSSL key pair, and for
+  # mocking signing_key to return the public key. The following code will do the
+  # trick:
+  #
+  #   flexmock(MitCertAuthProxy).should_receive(:signing_key).
+  #                              and_return(private_sign_key.public_key)
+  #
+  # Args:
+  #   name:: the full name in the DN of the fake authentication data
+  #   email:: the e-mail in the DN of the fake authentication data
+  #   private_sign_key:: an OpenSSL key pair used to sign the request
+  #   nonce:: the nonce in the fake data; defaults to generating a random nonce
+  #
+  # Returns a hash mocking the authentication service's response. 
+  def self.mock_auth_data(name, email, private_sign_key, nonce = random_nonce)
+    dn = '/C=US/ST=Massachusetts/O=Massachusetts Institute of Technology/' +
+         'OU=Client CA v1/CN=' + name + '/' + 'emailAddress=' + email
+    issuer_dn = '/C=US/ST=Massachusetts/O=Massachusetts Institute of ' +
+                'Technology/OU=Client CA v1'
+                
+    data = {'dn' => dn, 'issuer_dn' => issuer_dn, 'verify' => 'SUCCESS',
+            'serial' => 'D376EC2AE81A03E10743D175CB659F58',
+            'nonce' => nonce, 'valid_from' => (Time.now - 120).utc.to_s,
+            'valid_until' => (Time.now + 120).utc.to_s,
+            'cipher' => 'DHE-RSA-CAMELLIA256-SHA', 'protocol' => 'TLSv1',
+            'ssl_sig' => 'sha1WithRSAEncryption'}    
+    sign_data! private_sign_key, data
+  end
+  
   # URL to MIT's page explaining how to obtain certificates.
   #
   # Sites that need for MIT certificates should have a link to this page. The
@@ -101,7 +135,7 @@ module MitCertAuthProxy
   def self.verify_data_signature(data)
     signature = data['signature'].unpack('m').first
     blob = _presign_blob data
-    signing_key.verify OpenSSL::Digest::SHA1.new, signature, blob
+    signing_key.verify OpenSSL::Digest::SHA256.new, signature, blob
   end
   
   # Extracts the interesting fields from the authentication data.
@@ -123,10 +157,13 @@ module MitCertAuthProxy
   # This should only be called by the authentication proxy itself. Other library
   # users won't have the private signing key, so they won't get much use out of
   # this method.
+  #
+  # Returns the modified authentication data.
   def self.sign_data!(private_sign_key, data)
-    blob = _presign_blob data    
-    raw_signature = private_sign_key.sign OpenSSL::Digest::SHA1.new, blob
+    blob = _presign_blob data
+    raw_signature = private_sign_key.sign OpenSSL::Digest::SHA256.new, blob
     data['signature'] = [raw_signature].pack('m')
+    data
   end
   
   # Computes the blob of text to be signed.
